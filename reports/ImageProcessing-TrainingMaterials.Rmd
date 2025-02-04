@@ -1,0 +1,326 @@
+---
+title: "Image Processing:  Training Materials"
+author: "Data Science Three Co."
+output: html_document
+---
+```{r include=FALSE}
+rm(list = ls())
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction {.tabset}
+
+Welcome to the training materials for the Image Processing Report. These materials will highlight important skills gained from working with the data for this project. 
+
+### Setup Code
+
+```{r seed}
+set.seed(41)
+```
+
+```{r libraries, message=FALSE, warning=FALSE}
+library(data.table)
+library(DT)
+library(class) # For KNN
+library(rpart) # For Classification Tree
+library(e1071) # For SVM
+library(nnet) # For Multinomial logistic regression and Neural Networks
+library(randomForest) # For RF
+library(xgboost) # For XG boost
+library(glmnet) # For elastic net 
+library(knitr) # for nice tables
+library(dplyr)
+library(magrittr)
+```
+
+```{r constants}
+n.values <- c(2500, 5000, 10000)
+iterations <- 3
+total_train_size <- 60000      # Total number of rows in training data
+hour <- 60      #  To calculate runtime
+dp <- 4      # Decimal Places
+rf_ntree <- 100 # RF ntree
+rf_ntree2 <- 500 # RF ntree
+xgboost_max_depth <- 6 # xgboost max depth 
+xgboost_eta <- 0.3 # xgboost eta
+xgboost_nrounds <- 100 # xgboost nrounds
+
+```
+
+```{r functions}
+round.numerics <- function(x, digits){
+  if(is.numeric(x)){
+    x <- round(x = x, digits = digits)
+  }
+  return(x)
+}
+
+# Scoring Function
+calculate_score <- function(A, B, C) {
+  return(0.15 * A + 0.1 * B + 0.75 * C)
+}
+```
+
+```{r load_data}
+train <- fread("MNIST-fashion training set-49.csv", verbose = F)
+test <- fread("MNIST-fashion testing set-49.csv", verbose = F)
+
+```
+
+```{r explore_data, eval = FALSE}
+
+```
+
+
+```{r clean_data}
+# Convert label to a factor in both training and test data
+train$label <- as.factor(train$label)
+test$label <- as.factor(test$label)
+
+# Separate features and labels for the test set
+test_features <- as.data.frame(test[, -1, with = FALSE]) # Convert to data frame for compatibility with SVM and Tree
+test_labels <- test$label
+```
+
+```{r variables}
+# Initialize a data frame to store results
+scoreboard <- data.frame(
+  Model = character(),
+  Sample_Size = integer(),
+  Data = character(),
+  A = numeric(),
+  B = numeric(),
+  C = numeric(),
+  Points = numeric(),
+  stringsAsFactors = FALSE
+)
+```
+
+### 1. Data cleaning and model-specific set up
+
+#### Data Cleaning
+
+Many classification algorithms like decision trees, random forests, and SVMs in R expect the target labels to be factors, not numerical values, when performing classification tasks. Converting the labels ensures compatibility with these models and avoids errors during model training and testing.
+```{r clean_data_example1 , eval = FALSE}
+train$label <- as.factor(train$label)
+test$label <- as.factor(test$label)
+```
+
+
+Separating features and labels ensures that the model only sees the input data during testing and is then evaluated against the true labels separately. Converting test_features to a data frame ensures compatibility with certain algorithms that may require this format.
+```{r clean_data_example2 , eval = FALSE}
+test_features <- as.data.frame(test[, -1, with = FALSE]) 
+test_labels <- test$label
+```
+
+
+#### XGBoost
+
+1. Unlike other models like Random Forest or SVM, XGBoost requires the input data to be in a specific format known as DMatrix. This format is optimized for efficiency in XGBoost's computations but requires an extra data transformation step.
+
+2. XGBoost expects labels to start from zero, whereas many R classification models allow labels to start from any integer. In this code, the labels are adjusted by subtracting 1 (i.e., label = as.numeric(train$label) - 1) to meet this requirement.
+```{r xgboost_example, eval = FALSE}
+  train_matrix <- xgb.DMatrix(data = as.matrix(sample_data[, -1, with = FALSE]), label = as.numeric(sample_data$label) - 1)
+  test_matrix <- xgb.DMatrix(data = as.matrix(test_features), label = as.numeric(test_labels) - 1)
+```
+
+#### Elastic Net Regression
+
+1. Elastic Net with glmnet requires numeric labels, labels have to be converted to numeric factors for compatibility. 
+```{r enr_example1, eval = FALSE}
+sample_data$label <- as.numeric(as.factor(sample_data$label))
+```
+
+2. The model expects features to be in matrix format, so all features are converted accordingly.
+```{r enr_example2, eval = FALSE}
+features <- as.matrix(sample_data[, -1])
+```
+
+
+
+
+
+
+
+### 2. Model Development and Evaluation 
+
+This project requires you to run 10 different machine learning models. It is important to understand at a high level what the models are doing and how the parameters and hyper parameters affect the model's outcome. Changing these parameters is considered running a different model, so do not confuse for instance all Random Forests to be one model, but rather specified by the number of trees as well.
+
+A large part of the task requires tuning parameters to find the best parameters for that model in accordance to our scoring framework. It can be difficult to manage this many models, so it is imperative model outcomes are labeled correctly. Model functions should be written to take in multiple parameters to account for model changes. See the following code example for Random Forest: 
+
+```{r Random Forest example}
+# Random Forest 
+
+# Function to train and evaluate Random Forest 
+# ntree is a function parameter, so for example we can run both a random forest with 100 trees and 500 trees
+run_random_forest <- function(sample_data, ntree = rf_ntree) {
+  sample_data <- as.data.frame(sample_data)
+  
+  # Measure runtime for Random Forest
+  start_time <- Sys.time()
+  rf_model <- randomForest(label ~ ., data = sample_data, ntree = ntree)
+  rf_predictions <- predict(rf_model, newdata = test_features)
+  runtime <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+  
+  # Calculate accuracy and misclassification rate
+  accuracy <- mean(rf_predictions == test_labels)
+  return(list(accuracy = accuracy, runtime = runtime))
+}
+
+# Now we can run Random Forest with ntree = 100
+for (n in n.values) {
+  for (i in 1:iterations) {
+    sample_data <- train[sample(.N, n)]
+    result <- run_random_forest(sample_data, ntree = rf_ntree)
+    accuracy <- result$accuracy
+    runtime <- result$runtime
+
+    A <- n / total_train_size
+    B <- min(1, runtime / hour)
+    C <- 1 - accuracy
+    points <- calculate_score(A, B, C)
+
+    scoreboard <- rbind(scoreboard, data.frame(
+      Model = paste("Random Forest", "-", rf_ntree, " trees"), # labels model with number of trees 
+      Sample_Size = n,
+      Data = paste("dat", n, i, sep = "_"),
+      A = round(A, dp),
+      B = round(B, dp),
+      C = round(C, dp),
+      Points = round(points, dp)
+    ))
+  }
+}
+
+# We can also run Random Forest with ntree = 500
+for (n in n.values) {
+  for (i in 1:iterations) {
+    sample_data <- train[sample(.N, n)]
+    result <- run_random_forest(sample_data, ntree = rf_ntree2)
+    accuracy <- result$accuracy
+    runtime <- result$runtime
+
+    A <- n / total_train_size
+    B <- min(1, runtime / hour)
+    C <- 1 - accuracy
+    points <- calculate_score(A, B, C)
+
+    scoreboard <- rbind(scoreboard, data.frame(
+      Model = paste("Random Forest", "-", rf_ntree2, " trees"), # labels model with number of trees 
+      Sample_Size = n,
+      Data = paste("dat", n, i, sep = "_"),
+      A = round(A, dp),
+      B = round(B, dp),
+      C = round(C, dp),
+      Points = round(points, dp)
+    ))
+  }
+}
+```
+
+It is important to note that specific models and their libraries may have different functions for creating predictions. Make sure to check these possible differences before writing a model function based off of a different model's function. 
+
+Writing these functions does not just make it easier to manage the models and their code, but it also is important due to the computationally intensive nature of the project. Running this many models can be time consuming, so having an efficient pipeline to train models, evaluate their predictions, and store their scores can greatly cut down on run time.
+
+### 3. Scoreboard Framework 
+
+Another very important part of this project is the scoreboard and setting up the point system. Each model is given a point score to rank it by factoring in Data Efficiency, Runtime Efficiency and Accuracy. In order to determine which model is the "best" based on these three metrics, we must set up a scoring formula as well as a scoreboard to store and rank all of our results. The generic formula that is used to determine the point score for each model is: Points = 0.15 * A + 0.1 * B + 0.75 * C. Based on this formula, the lowest point score will indicate the best model for this project. 
+
+The following code shows how the scoreboard has been set up to account for the three different metrics:
+
+```{r variables_setup}
+# Initialize a data frame to store results
+scoreboard <- data.frame(
+  Model = character(),
+  Sample_Size = integer(),
+  Data = character(),
+  A = numeric(),
+  B = numeric(),
+  C = numeric(),
+  Points = numeric(),
+  stringsAsFactors = FALSE
+)
+```
+
+Below is an example of how a model's score is determined by using the Random Forrest model with 100 trees as an example: 
+
+First we must start by running the model: 
+```{r code_model6_development_example, eval = TRUE}
+# RF
+# Function to train and evaluate Random Forest
+run_random_forest <- function(sample_data, ntree = rf_ntree) {
+  sample_data <- as.data.frame(sample_data)
+  
+  # Measure runtime for Random Forest
+  start_time <- Sys.time()
+  rf_model <- randomForest(label ~ ., data = sample_data, ntree = ntree)
+  rf_predictions <- predict(rf_model, newdata = test_features)
+  runtime <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+  
+  # Calculate accuracy and misclassification rate
+  accuracy <- mean(rf_predictions == test_labels)
+  return(list(accuracy = accuracy, runtime = runtime))
+}
+
+```
+
+Then we apply the model to each sample size and iteration, and apply the Points formula breakdown to the 3 metrics, A, B and C. Finally we store those results in the scoreboard that we have previously created so that all all of the models can be compared by points. 
+
+Here is an example of how this is is done using the Random Forest model with 100 trees:
+```{r load_model6_example}
+# Apply Random Forest model to each sample size and iteration
+for (n in n.values) {
+  for (i in 1:iterations) {
+    sample_data <- train[sample(.N, n)]
+    result <- run_random_forest(sample_data, ntree = rf_ntree)
+    accuracy <- result$accuracy
+    runtime <- result$runtime
+    
+    A <- n / total_train_size
+    B <- min(1, runtime / hour)
+    C <- 1 - accuracy
+    points <- calculate_score(A, B, C)
+    
+    scoreboard <- rbind(scoreboard, data.frame(
+      Model = paste("Random Forest", "-", rf_ntree, " trees"),
+      Sample_Size = n,
+      Data = paste("dat", n, i, sep = "_"),
+      A = round(A, dp),
+      B = round(B, dp),
+      C = round(C, dp),
+      Points = round(points, dp)
+    ))
+  }
+}
+```
+
+There are two more steps to make sure that the scoreboard is easy to interpret The first is that we order the points from lowest to highest, recall, we are interested in the model with the lowest point score. The code below shows how this is done:
+
+```{r scoreboard_setup}
+# scoreboard is ordered by the points from lowest to highest (as we want the lowest points)
+Preliminary_Results <- scoreboard[order(scoreboard$Points, scoreboard$Model, scoreboard$Sample_Size), ]
+kable(Preliminary_Results)
+```
+
+Finally we want to group each model together by model type and sample size and then arrange the models by the number of mean points. The code below indicates how this is done:
+```{r}
+scoreboard <- scoreboard %>%
+  group_by(Model, Sample_Size) %>%
+  summarise(
+    Mean_A = round(mean(A), 4),
+    Mean_B = round(mean(B), 4),
+    Mean_C = round(mean(C), 4),
+    Mean_Points = round(mean(Points), 4)
+  ) %>%
+  arrange(Mean_Points)
+kable(scoreboard)
+```
+
+With all these steps we are able to properly set up and fill in the scoreboard in order to have a clear and organized way of determining which of the models is best suited for image recognition in this project. 
+
+
+
+
