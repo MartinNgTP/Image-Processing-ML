@@ -38,19 +38,8 @@ Points = 0.15 * A + 0.1 * B + 0.75 * C
 - Performance metrics for each model are documented in the `reports/` folder.
 - Scoreboards summarize average model performance across different sample sizes.
 
-## 📝 How to Run
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/MartinNgTP/Image-Processing-ML.git
-   ```
-2. Navigate to the project directory:
-   ```bash
-   cd Image-Processing-ML
-   ```
-3. Open the R Markdown files in the `docs/` folder to view model implementations and analyses.
-
-## 🌍 Live Demo
-Check out the live reports [here](https://martinngtp.github.io/Image-Processing-ML/).
+## 🌍 Reports
+Check out the reports [here](https://martinngtp.github.io/Image-Processing-ML/).
 
 ## 📚 Acknowledgments
 - Fashion MNIST Dataset by Zalando Research
