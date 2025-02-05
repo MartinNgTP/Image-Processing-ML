@@ -47,5 +47,5 @@ Check out the reports [here](https://martinngtp.github.io/Image-Processing-ML/).
 
 ---
 
-Made with ❤️ by Martin Ng
+Made by Martin Ng
 
